@@ -170,6 +170,31 @@ def get_temp_size(plot_id, temporary_directory, temporary2_directory):
     return temp_size
 
 
+def get_file_size(directories: list):
+    temp_size = 0
+    for file_path in directories:
+        try:
+            temp_size += os.path.getsize(file_path)
+        except FileNotFoundError:
+            pass
+    return temp_size
+
+
+def get_temp_files(plot_id, temporary_directory, temporary2_directory):
+    directories = []
+    res = []
+    if not plot_id:
+        return directories
+    if temporary_directory:
+        directories += [os.path.join(temporary_directory, file) for file in os.listdir(temporary_directory) if file]
+    if temporary2_directory:
+        directories += [os.path.join(temporary2_directory, file) for file in os.listdir(temporary2_directory) if file]
+    for file_path in directories:
+        if plot_id in file_path:
+            res.append(file_path)
+    return res
+
+
 def get_running_plots(jobs, running_work, instrumentation_settings):
     chia_processes = []
     logging.info(f'Getting running plots')
@@ -235,8 +260,9 @@ def get_running_plots(jobs, running_work, instrumentation_settings):
         if log_file_path:
             plot_id = get_plot_id(file_path=log_file_path)
 
-        temp_file_size = get_temp_size(plot_id=plot_id, temporary_directory=temporary_directory,
+        tmp_files = get_temp_files(plot_id=plot_id, temporary_directory=temporary_directory,
                                        temporary2_directory=temporary2_directory)
+        temp_file_size = get_file_size(tmp_files)
 
         temporary_drive, temporary2_drive, destination_drive = get_plot_drives(commands=commands)
         k_size = get_plot_k_size(commands=commands)
@@ -258,6 +284,7 @@ def get_running_plots(jobs, running_work, instrumentation_settings):
         work.temporary2_drive = temporary2_drive
         work.destination_drive = destination_drive
         work.temp_file_size = temp_file_size
+        work.temp_files = tmp_files
         work.k_size = k_size
 
         running_work[work.pid] = work

@@ -11,7 +11,9 @@ def _get_row_info(pid, running_work, view_settings, as_raw_values=False):
     work = running_work[pid]
     phase_times = work.phase_times
     elapsed_time = (datetime.now() - work.datetime_start)
+    elapsed_log_time = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(work.log_file)))
     elapsed_time = pretty_print_time(elapsed_time.seconds + elapsed_time.days * 86400)
+    elapsed_log_time = pretty_print_time(elapsed_log_time.seconds + elapsed_log_time.days * 86400)
     phase_time_log = []
     plot_id_prefix = ''
     if work.plot_id:
@@ -27,8 +29,9 @@ def _get_row_info(pid, running_work, view_settings, as_raw_values=False):
         pid,
         work.datetime_start.strftime(view_settings['datetime_format']),
         elapsed_time,
+        elapsed_log_time,
         work.current_phase,
-        ' / '.join(phase_time_log),
+        '/'.join(phase_time_log),
         work.progress,
         pretty_print_bytes(work.temp_file_size, 'gb', 0, " GiB"),
     ]
@@ -64,11 +67,11 @@ def pretty_print_table(rows):
                 continue
             max_characters[i] = length
 
-    headers = "   ".join([cell.center(max_characters[i]) for i, cell in enumerate(rows[0])])
-    separator = '=' * (sum(max_characters) + 3 * len(max_characters))
+    headers = " ".join([cell.center(max_characters[i]) for i, cell in enumerate(rows[0])])
+    separator = '=' * (sum(max_characters) + 1 * len(max_characters))
     console = [separator, headers, separator]
     for row in rows[1:]:
-        console.append("   ".join([cell.ljust(max_characters[i]) for i, cell in enumerate(row)]))
+        console.append(" ".join([cell.ljust(max_characters[i]) for i, cell in enumerate(row)]))
     console.append(separator)
     return "\n".join(console)
 
@@ -98,7 +101,7 @@ def get_job_data(jobs, running_work, view_settings, as_json=False):
 
 
 def pretty_print_job_data(job_data):
-    headers = ['num', 'job', 'k', 'plot_id', 'pid', 'start', 'elapsed_time', 'phase', 'phase_times', 'progress', 'temp_size']
+    headers = ['num', 'job', 'k', 'plot_id', 'pid', 'start', 'elapsed', 'losing_log', 'phase', 'phase_times', 'progress', 'temp_size']
     rows = [headers] + job_data
     return pretty_print_table(rows)
 

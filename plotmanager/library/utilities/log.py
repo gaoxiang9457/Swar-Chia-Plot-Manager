@@ -4,6 +4,7 @@ import os
 import psutil
 import re
 import socket
+from datetime import datetime, timedelta
 
 from plotmanager.library.utilities.instrumentation import increment_plots_completed
 from plotmanager.library.utilities.notifications import send_notifications
@@ -11,7 +12,8 @@ from plotmanager.library.utilities.print import pretty_print_time
 
 
 def get_log_file_name(log_directory, job, datetime):
-    return os.path.join(log_directory, f'{job.name}_{str(datetime).replace(" ", "_").replace(":", "_").replace(".", "_")}.log')
+    return os.path.join(log_directory,
+                        f'{job.name}_{str(datetime).replace(" ", "_").replace(":", "_").replace(".", "_")}.log')
 
 
 def _analyze_log_end_date(contents):
@@ -202,3 +204,26 @@ def check_log_progress(jobs, running_work, progress_settings, notification_setti
             )
             break
         del running_work[pid]
+
+
+def remove_dead_job(jobs, running_work, progress_settings, notification_settings, view_settings,
+                    instrumentation_settings):
+    for pid, work in list(running_work.items()):
+        mtime = datetime.fromtimestamp(os.path.getmtime(work.log_file))
+        if not work.log_file:
+            continue
+
+        elapsed_time = (datetime.now() - mtime)
+        if psutil.pid_exists(pid) and elapsed_time > timedelta(minutes=30):
+            logging.info(f'PID: {pid},modify time:{mtime} log file:{work.log_file}')
+            logging.info(
+                f' PID  {pid} tmp drive:{work.temporary_drive} logfile last modified lager than 30 minutes : {elapsed_time}')
+            logging.info(f' kill PID {pid}')
+            # fixme killing
+            logging.info(f' removing PID {pid} tmp file,'
+                         f' temporary_drive: {work.temporary_drive}'
+                         f' temporary2_drive: {work.temporary2_drive}'
+                         f' destination_drive:{work.destination_drive}')
+            # for tmp_file in work.temp_files:
+            #     logging.info(f' deleting PID {pid} tmp files:{tmp_file}')
+            logging.info(f' deleting PID {pid} tmp files:{work.temp_files[0]}')
