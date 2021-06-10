@@ -11,9 +11,11 @@ def _get_row_info(pid, running_work, view_settings, as_raw_values=False):
     work = running_work[pid]
     phase_times = work.phase_times
     elapsed_time = (datetime.now() - work.datetime_start)
-    elapsed_log_time = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(work.log_file)))
+    elapsed_log_time = None
+    if os.path.exists(work.log_file):
+        elapsed_log_time = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(work.log_file)))
+        elapsed_log_time = pretty_print_time(elapsed_log_time.seconds + elapsed_log_time.days * 86400)
     elapsed_time = pretty_print_time(elapsed_time.seconds + elapsed_time.days * 86400)
-    elapsed_log_time = pretty_print_time(elapsed_log_time.seconds + elapsed_log_time.days * 86400)
     phase_time_log = []
     plot_id_prefix = ''
     if work.plot_id:
@@ -92,7 +94,7 @@ def get_job_data(jobs, running_work, view_settings, as_json=False):
         added_pids.append(pid)
     rows.sort(key=lambda x: (x[5]), reverse=True)
     for i in range(len(rows)):
-        rows[i] = [str(i+1)] + rows[i]
+        rows[i] = [str(i + 1)] + rows[i]
     if as_json:
         jobs = dict(jobs=rows)
         print(json.dumps(jobs, separators=(',', ':')))
@@ -101,7 +103,8 @@ def get_job_data(jobs, running_work, view_settings, as_json=False):
 
 
 def pretty_print_job_data(job_data):
-    headers = ['num', 'job', 'k', 'plot_id', 'pid', 'start', 'elapsed', 'losing_log', 'phase', 'phase_times', 'progress', 'temp_size']
+    headers = ['num', 'job', 'k', 'plot_id', 'pid', 'start', 'elapsed', 'losing_log', 'phase', 'phase_times',
+               'progress', 'temp_size']
     rows = [headers] + job_data
     return pretty_print_table(rows)
 
@@ -213,8 +216,9 @@ def print_view(jobs, running_work, analysis, drives, next_log_check, view_settin
         print(f'CPU Usage: {psutil.cpu_percent()}%')
     if view_settings.get('include_ram'):
         ram_usage = psutil.virtual_memory()
-        print(f'RAM Usage: {pretty_print_bytes(ram_usage.used, "gb")}/{pretty_print_bytes(ram_usage.total, "gb", 2, "GiB")}'
-              f'({ram_usage.percent}%)')
+        print(
+            f'RAM Usage: {pretty_print_bytes(ram_usage.used, "gb")}/{pretty_print_bytes(ram_usage.total, "gb", 2, "GiB")}'
+            f'({ram_usage.percent}%)')
     print()
     if view_settings.get('include_plot_stats'):
         print(f'Plots Completed Yesterday: {analysis["summary"].get(datetime.now().date() - timedelta(days=1), 0)}')

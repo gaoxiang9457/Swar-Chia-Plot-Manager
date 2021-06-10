@@ -157,9 +157,11 @@ def get_temp_size(plot_id, temporary_directory, temporary2_directory):
     temp_size = 0
     directories = []
     if temporary_directory:
-        directories += [os.path.join(temporary_directory, file) for file in os.listdir(temporary_directory) if file]
+        directories += [os.path.join(temporary_directory, file) for file in os.listdir(temporary_directory) if
+                        file and file.endswith('.tmp')]
     if temporary2_directory:
-        directories += [os.path.join(temporary2_directory, file) for file in os.listdir(temporary2_directory) if file]
+        directories += [os.path.join(temporary2_directory, file) for file in os.listdir(temporary2_directory) if
+                        file and file.endswith('.tmp')]
     for file_path in directories:
         if plot_id not in file_path:
             continue
@@ -175,7 +177,7 @@ def get_file_size(directories: list):
     for file_path in directories:
         try:
             temp_size += os.path.getsize(file_path)
-        except FileNotFoundError:
+        except (FileNotFoundError, PermissionError):
             pass
     return temp_size
 
@@ -261,7 +263,7 @@ def get_running_plots(jobs, running_work, instrumentation_settings):
             plot_id = get_plot_id(file_path=log_file_path)
 
         tmp_files = get_temp_files(plot_id=plot_id, temporary_directory=temporary_directory,
-                                       temporary2_directory=temporary2_directory)
+                                   temporary2_directory=temporary2_directory)
         temp_file_size = get_file_size(tmp_files)
 
         temporary_drive, temporary2_drive, destination_drive = get_plot_drives(commands=commands)

@@ -114,11 +114,13 @@ def get_phase_info(contents, view_settings=None, pretty_print=True):
     phase_dates = {}
 
     for phase in range(1, 5):
-        match = re.search(rf'time for phase {phase} = ([\d\.]+) seconds\. CPU \([\d\.]+%\) [A-Za-z]+\s([^\n]+)\n', contents, flags=re.I)
+        match = re.search(rf'time for phase {phase} = ([\d\.]+) seconds\. CPU \([\d\.]+%\) [A-Za-z]+\s([^\n]+)\n',
+                          contents, flags=re.I)
         if match:
             seconds, date_raw = match.groups()
             seconds = float(seconds)
-            phase_times[phase] = pretty_print_time(int(seconds), view_settings['include_seconds_for_phase']) if pretty_print else seconds
+            phase_times[phase] = pretty_print_time(int(seconds), view_settings[
+                'include_seconds_for_phase']) if pretty_print else seconds
             parsed_date = dateparser.parse(date_raw)
             phase_dates[phase] = parsed_date
 
@@ -180,7 +182,7 @@ def check_log_progress(jobs, running_work, progress_settings, notification_setti
         work.current_phase = current_phase
         work.progress = f'{progress:.2f}%'
 
-        if psutil.pid_exists(pid) and 'renamed final file from ' not in data.lower():
+        if psutil.pid_exists(pid) and 'Renamed final file from' not in data:
             logging.info(f'PID still alive: {pid}')
             continue
 
@@ -194,36 +196,70 @@ def check_log_progress(jobs, running_work, progress_settings, notification_setti
             if pid in job.running_work:
                 job.running_work.remove(pid)
             job.total_running -= 1
-            job.total_completed += 1
-            increment_plots_completed(increment=1, job_name=job.name, instrumentation_settings=instrumentation_settings)
+            if 'Created a total of' in data:
+                job.total_completed += 1
+                increment_plots_completed(increment=1, job_name=job.name,
+                                          instrumentation_settings=instrumentation_settings)
 
-            send_notifications(
-                title='Plot Completed',
-                body=f'You completed a plot on {socket.gethostname()}!',
-                settings=notification_settings,
-            )
             break
         del running_work[pid]
 
 
-def remove_dead_job(jobs, running_work, progress_settings, notification_settings, view_settings,
-                    instrumentation_settings):
+# remove_dead_job by log file modify time
+def remove_dead_job(running_work):
+    job_ids = []
+    # check all job
     for pid, work in list(running_work.items()):
-        mtime = datetime.fromtimestamp(os.path.getmtime(work.log_file))
         if not work.log_file:
             continue
+        job_ids.append(work.plot_id)
+        mtime = datetime.fromtimestamp(os.path.getmtime(work.log_file))
 
         elapsed_time = (datetime.now() - mtime)
-        if psutil.pid_exists(pid) and elapsed_time > timedelta(minutes=30):
+        if psutil.pid_exists(pid) and elapsed_time > timedelta(minutes=180):
             logging.info(f'PID: {pid},modify time:{mtime} log file:{work.log_file}')
             logging.info(
                 f' PID  {pid} tmp drive:{work.temporary_drive} logfile last modified lager than 30 minutes : {elapsed_time}')
+
             logging.info(f' kill PID {pid}')
-            # fixme killing
+            p = psutil.Process(pid)
+            p.kill()
+
             logging.info(f' removing PID {pid} tmp file,'
                          f' temporary_drive: {work.temporary_drive}'
                          f' temporary2_drive: {work.temporary2_drive}'
                          f' destination_drive:{work.destination_drive}')
-            # for tmp_file in work.temp_files:
-            #     logging.info(f' deleting PID {pid} tmp files:{tmp_file}')
-            logging.info(f' deleting PID {pid} tmp files:{work.temp_files[0]}')
+            for tmp_file in work.temp_files:
+                logging.info(f' deleting PID {pid} tmp files:{tmp_file}')
+                try:
+                    os.remove(tmp_file)
+                except (IOError, OSError):
+                    pass
+    # check all drive
+    tmp_files = []
+    for item in psutil.disk_partitions(False):
+        tmp_dir = os.path.join(item.mountpoint, 'tmp')
+        if os.path.exists(tmp_dir):
+            print(tmp_dir)
+            if tmp_dir:
+                tmp_files += [os.path.join(tmp_dir, file) for file in os.listdir(tmp_dir) if
+                              file and file.endswith('.tmp')]
+
+    work_list = list(running_work.items())
+    plot_ids = set({})
+    for tmp_file in tmp_files:
+        need_delete = True
+        for pid, work in work_list:
+            if work.plot_id in tmp_file:
+                need_delete = False
+                break
+        if need_delete:
+            logging.debug(f'need delete file: {tmp_file}')
+            match = re.search(r'-(\w{64})\.', tmp_file, re.I)
+            if match:
+                plot_ids.add(match.groups()[0])
+            if os.path.exists(tmp_file):
+                os.remove(tmp_file)
+
+    for plot_id in plot_ids:
+        logging.info(f' delete plotid tmp file: {plot_id}')
